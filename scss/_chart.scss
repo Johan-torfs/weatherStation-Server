@@ -1,0 +1,9 @@
+.chart {
+  transition-duration: 0.5s;
+}
+
+@include media-breakpoint-up(lg) {
+  .chart:hover {
+    transform: scale(1.05);
+  }
+}

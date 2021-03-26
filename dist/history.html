@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Station | History</title>
+    <link rel="stylesheet" href="css/style.css?v=20">
+</head>
+
+<body>
+    <div class="wrapper">
+        <nav class="nav navbar-expand-md navbar-light bg-primary mb-4">
+            <div class="container">
+                <button class="navbar-toggler w-100" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        <li class="nav-item btn btn-primary"><a class="nav-link" href="index.html">Home</a></li>
+                        <li class="nav-item btn btn-primary"><a class="nav-link active" href="#">History</a></li>
+                        <li class="nav-item btn btn-primary"><a class="nav-link" href="fullHistory.html">Full History</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container">
+            <h1>Weather Station <small>- history</small></h1>
+            <div class="card shadow p-3 mb-2">
+                <form action="history.html" method="GET">
+                    <div class="form-group d-flex flex-column flex-md-row m-0">
+                        <label class="coll-sm-2 col-form-label" for="location">Select location:</label>
+                        <div class="col-sm-10 p-0 px-md-3">
+                            <select class="form-control" name="location" id="location">
+                                <option value="" selected>&lt;Geen locatie geselecteerd&gt;</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="d-lg-flex flex-lg-row flex-lg-nowrap mt-lg-3">
+                <div id="temperature" class="chart col card shadow p-3 mb-2 mr-lg-3" data-toggle="modal" data-target="#graphModal">
+                    <h2>Temperature</h2>
+                    <canvas id="temperatureChart" width="400" height="400"></canvas>
+                </div>
+
+                <div id="pressure" class="chart col card shadow p-3 mb-2" data-toggle="modal" data-target="#graphModal">
+                    <h2>Pressure</h2>
+                    <canvas id="pressureChart" width="400" height="400"></canvas>
+                </div>
+
+                <div id="lightlevel" class="chart col card shadow p-3 mb-2 ml-lg-3" data-toggle="modal" data-target="#graphModal">
+                    <h2>Light Level</h2>
+                    <canvas id="lightChart" width="400" height="400"></canvas>
+                </div>
+            </div>
+        </main>
+
+        <div class="flex-fill"></div>
+
+        <footer class="bg-primary">
+            <div class="container">
+                <p class="text-center p-3 m-0 mt-2">
+                    &copy; Johan Torfs
+                </p>
+            </div>
+        </footer>
+
+        <!-- Modal -->
+        <div class="modal fade" id="graphModal" tabindex="-1" role="dialog" aria-labelledby="graphModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/jquery.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+
+    <script>
+        var labelsArrayTemperature = [];
+        var dataArrayTemperature = [];
+        var labelsArrayPressure = [];
+        var dataArrayPressure = [];
+        var labelsArrayLightLevel = [];
+        var dataArrayLightLevel = [];
+        var place = "";
+        var reloadPeriod = 30000;
+        var running = false;
+
+        function loadLocations() {
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    var res = JSON.parse(this.responseText);
+                    var places = res.locations;
+                    places.forEach(function (item) {
+                        $('#location').append('<option value="' + item +'">' + item + '</option>');
+                    });
+                }
+            };
+            xhttp.open("GET", "php/getValidLocations.php", true);
+            xhttp.send();
+        };
+
+        function updateCharts(forceUpdate = false) {
+            if (!running) return;
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    var res = JSON.parse(this.responseText);
+                    var temperature = res.temperature;
+                    if (forceUpdate || temperatureChart.data.labels.length === 0 || (temperature.length > 0 && (temperature[temperature.length-1].date + " " + temperature[temperature.length-1].time) !== temperatureChart.data.labels[0])) {
+                        console.log('updated Temperature')
+                        labelsArrayTemperature = [];
+                        dataArrayTemperature = [];
+                        temperature.forEach(function(item) {
+                            labelsArrayTemperature.push(item.date + " " + item.time);
+                            dataArrayTemperature.push(item.value);
+                        });
+                        labelsArrayTemperature = labelsArrayTemperature.reverse();
+                        dataArrayTemperature = dataArrayTemperature.reverse();
+                        temperatureChart.data.labels = labelsArrayTemperature;
+                        temperatureChart.data.datasets.pop();
+                        temperatureChart.data.datasets.push({
+                            label: 'Temperature [°C]',
+                            data: dataArrayTemperature,
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 99, 132, 1)'
+                            ],
+                            borderWidth: 1,
+                        });
+                        temperatureChart.update();
+                    }
+
+                    var pressure = res.pressure;
+                    if (forceUpdate || pressureChart.data.labels.length === 0 || (pressure.length > 0 && (pressure[pressure.length-1].date + " " + pressure[pressure.length-1].time) !== pressureChart.data.labels[0])) {
+                        console.log('updated Pressure')
+                        labelsArrayPressure = [];
+                        dataArrayPressure = [];
+                        pressure.forEach(function(item) {
+                            labelsArrayPressure.push(item.date + " " + item.time);
+                            dataArrayPressure.push(item.value);
+                        });
+                        labelsArrayPressure = labelsArrayPressure.reverse();
+                        dataArrayPressure = dataArrayPressure.reverse();
+                        pressureChart.data.labels = labelsArrayPressure;
+                        pressureChart.data.datasets.pop();
+                        pressureChart.data.datasets.push({
+                            label: 'Pressure [hPa]',
+                            data: dataArrayPressure,
+                            backgroundColor: [
+                                'rgba(50, 99, 255, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(50, 99, 255, 1)'
+                            ],
+                            borderWidth: 1
+                        });
+                        pressureChart.update();
+                    }
+
+                    var lightlvl = res.lightlevel;
+                    if (forceUpdate || lightChart.data.labels.length === 0 || (lightlvl.length > 0 && (lightlvl[lightlvl.length-1].date + " " + lightlvl[lightlvl.length-1].time) !== lightChart.data.labels[0])) {
+                        console.log('updated Light Level')
+                        labelsArrayLightLevel = [];
+                        dataArrayLightLevel = [];
+                        lightlvl.forEach(function(item) {
+                            labelsArrayLightLevel.push(item.date + " " + item.time);
+                            dataArrayLightLevel.push(item.value);
+                        });
+                        labelsArrayLightLevel = labelsArrayLightLevel.reverse();
+                        dataArrayLightLevel = dataArrayLightLevel.reverse();
+                        lightChart.data.labels = labelsArrayLightLevel;
+                        lightChart.data.datasets.pop();
+                        lightChart.data.datasets.push({
+                            label: 'Light Level [lux]',
+                            data: dataArrayLightLevel,
+                            backgroundColor: [
+                                'rgba(70, 255, 100, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(70, 255, 100, 1)'
+                            ],
+                            borderWidth: 1
+                        });
+                        lightChart.update();
+                    }
+
+                    forceUpdate = false;
+                    if (running) setTimeout(updateCharts, reloadPeriod);
+                }
+            };
+            xhttp.open("GET", "php/updateHistory.php?location=" + place, true);
+            xhttp.send();
+        };
+
+        var ctxTemperature = document.getElementById('temperatureChart').getContext('2d');
+        var temperatureChart = new Chart(ctxTemperature, {
+            type: 'line',
+            data: {
+                labels: labelsArrayTemperature,
+                datasets: [{
+                    label: 'Temperature [°C]',
+                    data: dataArrayTemperature,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                scales: {
+                    xAxes: [{
+                        ticks: {
+                            display: false
+                        }
+                    }]
+                }
+            }
+        });
+        var ctxPressure = document.getElementById('pressureChart').getContext('2d');
+        var pressureChart = new Chart(ctxPressure, {
+            type: 'line',
+            data: {
+                labels: labelsArrayPressure,
+                datasets: [{
+                    label: 'Pressure [hPa]',
+                    data: dataArrayPressure,
+                    backgroundColor: [
+                        'rgba(50, 99, 255, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(50, 99, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    xAxes: [{
+                        ticks: {
+                            display: false
+                        }
+                    }]
+                }
+            }
+        });
+        var ctxLight = document.getElementById('lightChart').getContext('2d');
+        var lightChart = new Chart(ctxLight, {
+            type: 'line',
+            data: {
+                labels: labelsArrayLightLevel,
+                datasets: [{
+                    label: 'Light Level [lux]',
+                    data: dataArrayLightLevel,
+                    backgroundColor: [
+                        'rgba(70, 255, 100, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(70, 255, 100, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    xAxes: [{
+                        ticks: {
+                            display: false
+                        }
+                    }]
+                }
+            }
+        });
+
+        function run() {
+            if (!running) {
+                running = true;
+                updateCharts();
+            }
+        };
+
+        $(function () {
+            loadLocations();
+            run();
+            $('.chart').hide();
+
+            $('#graphModal').on('show.bs.modal', function (event) {
+                var card = $(event.relatedTarget); // Button that triggered the modal
+                var graph = card.find('canvas');
+                var modal = $(this);
+                modal.data('graph', card.attr('id'));
+                graph.appendTo(modal.find('.modal-body'));
+            });
+
+            $('#graphModal').on('hide.bs.modal', function (event) {
+                var modal = $(this);
+                var graph = modal.find('canvas');
+                graph.appendTo($('#' + modal.data('graph')));
+            });
+
+            $('#location').change(function () {
+                place = $(this).find(':selected').val();
+                $('.chart').show();
+                updateCharts(true);
+            });
+        });
+    </script>
+</body>
+
+</html>
